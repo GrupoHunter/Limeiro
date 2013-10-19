@@ -20,9 +20,11 @@ public aspect CallTimerAspect {
 
 	public int amountCall(Object target, String property) {
 		int counter = 0;
-		for (Object object : map.get(property)) {
-			if(object.equals(target))
-				counter++;
+		if(map.containsKey(property)){
+			for (Object object : map.get(property)) {
+				if (object.equals(target))
+					counter++;
+			}
 		}
 		return counter;
 	}

@@ -1,57 +1,35 @@
 package aspectj.validator;
 
-import java.lang.reflect.Field;
-
-import aspectj.annotation.Monitored;
+import java.util.HashMap;
+import java.util.Map;
 
 public aspect ValidatorAspect {
 
-	pointcut validateObject(Object target, Object newValue) : 
-		call(@Monitored * *(..)) && args(newValue) && target(target);
+	pointcut validateObject(Object target, String newValue) : 
+		set( * *..* ) && args(newValue) && target(target);
 
-	void around(Object target, Object newValue): validateObject(target, newValue){
-		String oldValue = (String) getValue(target);
-		proceed(target, newValue);
-		String newVal = (String) getValue(target);
-		if(v != null) // Avoid problems with other test 
-			this.toValidate(newVal,oldValue);
+	before(Object target, String newValue): validateObject(target, newValue){
+		String property = thisJoinPoint.getSignature().getName();
+		if(record.containsKey(target))
+			this.toValidate(target, property, newValue);
 	}
 	
 	public void addValidator(Object target, String property, Validator<String> anValidator) {
-		this.v = anValidator;
-		this.object = target;
-		this.monitored = property;
+		if (record.containsKey(target))
+			record.get(target).put(property, anValidator);
+		else {
+			record.put(target, new HashMap<String, Validator<String>>());
+			record.get(target).put(property, anValidator);
+		}
 	}
 
 	// *************Fixture*************************
-	private Validator<String> v;
-	private Object object;
-	private String monitored; 
-
-	protected void rollbackValue(String value){
-		try {
-			Field fieldName = object.getClass().getDeclaredField(monitored);
-			fieldName.setAccessible(true);
-			fieldName.set(object, value);
-		} catch (Throwable e) {
-		}
-	}
 	
-	protected void toValidate(String anValue, String oldValue) throws InvalidValueException {
-		if (!v.validate(anValue)){
-			rollbackValue(oldValue);
-			throw new InvalidValueException();
-		}
-	}
+	 private Map<Object, Map<String, Validator<String>>> record = new HashMap<Object, Map<String, Validator<String>>>();
 	
-	protected Object getValue(Object oldValue) {
-		Object value = null;
-		try {
-			Field fieldName = oldValue.getClass().getDeclaredField(monitored);
-			fieldName.setAccessible(true);
-			value = fieldName.get(oldValue);
-		} catch (Throwable e) {
-		}
-		return value;
-	}
+	 protected void toValidate(Object target, String property, String newValue) throws InvalidValueException {
+		 Validator<String> validateTarget = record.get(target).containsKey(property)? record.get(target).get(property) : null;
+		 if(!validateTarget.validate(newValue) && validateTarget != null)
+			 throw new InvalidValueException();
+	 }	
 }
